@@ -1,13 +1,15 @@
-use crate::manifest::{load_manifest, Plugin};
+use crate::manifest::{load_manifest, FourPartSemver, ThreePartSemver, ValidatePlugin};
+use std::convert::TryFrom;
 use std::fmt;
 use std::path::PathBuf;
-use uuid::Uuid;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Debug, Default)]
 struct ValidationReport {
     guid: Option<Vec<GuidError>>,
     url: Option<Vec<UrlError>>,
+    semver: Option<Vec<SemverError>>,
 }
 
 #[derive(Debug)]
@@ -23,9 +25,17 @@ struct UrlError {
     error: url::ParseError,
 }
 
+#[derive(Debug)]
+struct SemverError {
+    plugin_name: String,
+    plugin_version: String,
+    abi_error: Option<crate::manifest::SemverError>,
+    version_error: Option<crate::manifest::SemverError>,
+}
+
 impl ValidationReport {
     fn is_none(&self) -> bool {
-        self.guid.is_none() && self.url.is_none()
+        self.guid.is_none() && self.url.is_none() && self.semver.is_none()
     }
 }
 
@@ -45,7 +55,27 @@ impl fmt::Display for ValidationReport {
             }
             if let Some(v) = &self.url {
                 for e in v {
-                    results.push_str(&format!("Plugin {} version {} failed validation! URL {}.\n", e.plugin_name, e.plugin_version, e.error));
+                    results.push_str(&format!(
+                        "Plugin {} version {} failed validation! URL {}.\n",
+                        e.plugin_name, e.plugin_version, e.error
+                    ));
+                }
+            }
+            if let Some(v) = &self.semver {
+                for e in v {
+                    let mut result = String::new();
+                    result.push_str(&format!(
+                        "Plugin {} version {} failed validation! ",
+                        e.plugin_name, e.plugin_version
+                    ));
+                    if e.abi_error.is_some() {
+                        result.push_str(&format!("Target abi {} ", e.abi_error.as_ref().unwrap()));
+                    }
+                    if e.version_error.is_some() {
+                        result.push_str(&format!("Version {} ", e.version_error.as_ref().unwrap()));
+                    }
+                    result.push('\n');
+                    results.push_str(&result);
                 }
             }
             write!(f, "{}", results.trim())
@@ -58,10 +88,11 @@ pub fn validate_manifest(file: PathBuf) {
     let mut report = ValidationReport::default();
     report.guid = validate_guid(&manifest);
     report.url = validate_url(&manifest);
+    report.semver = validate_semver(&manifest);
     println!("{}", report)
 }
 
-fn validate_guid(manifest: &[Plugin]) -> Option<Vec<GuidError>> {
+fn validate_guid(manifest: &[ValidatePlugin]) -> Option<Vec<GuidError>> {
     let mut results = Vec::new();
 
     for p in manifest {
@@ -80,7 +111,7 @@ fn validate_guid(manifest: &[Plugin]) -> Option<Vec<GuidError>> {
     }
 }
 
-fn validate_url(manifest: &[Plugin]) -> Option<Vec<UrlError>> {
+fn validate_url(manifest: &[ValidatePlugin]) -> Option<Vec<UrlError>> {
     let mut results = Vec::new();
 
     for p in manifest {
@@ -90,6 +121,40 @@ fn validate_url(manifest: &[Plugin]) -> Option<Vec<UrlError>> {
                     plugin_name: p.name.clone(),
                     plugin_version: v.version.clone(),
                     error: e,
+                });
+            }
+        }
+    }
+
+    if results.is_empty() {
+        None
+    } else {
+        Some(results)
+    }
+}
+
+fn validate_semver(manifest: &[ValidatePlugin]) -> Option<Vec<SemverError>> {
+    let mut results = Vec::new();
+
+    for p in manifest {
+        for v in &p.versions {
+            let abi_error = if let Err(abi) = ThreePartSemver::try_from(v.target_abi.clone()) {
+                Some(abi)
+            } else {
+                None
+            };
+            let version_error = if let Err(version) = FourPartSemver::try_from(v.version.clone()) {
+                Some(version)
+            } else {
+                None
+            };
+
+            if abi_error.is_some() || version_error.is_some() {
+                results.push(SemverError {
+                    plugin_name: p.name.clone(),
+                    plugin_version: v.version.clone(),
+                    abi_error,
+                    version_error,
                 });
             }
         }
