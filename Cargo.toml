@@ -1,0 +1,15 @@
+[package]
+name = "jellyfin-manifest-tool"
+version = "0.1.0"
+authors = ["sparky8251 <sparky@possumlodge.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.112"
+serde_json = "1.0.55"
+structopt = "0.3.15"
+uuid = { version = "0.8.1", features = ["serde", "v4"], default-features = false }
+url = "2.1.1"
+anyhow = "1.0.31"
