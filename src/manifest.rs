@@ -31,7 +31,7 @@ pub struct PluginVersion {
     #[serde(rename = "targetAbi")]
     target_abi: String, // TODO: see if I can limit this to semver representation
     #[serde(rename = "sourceUrl")]
-    source_url: String, // TODO: Limit this to valid URLs only.
+    pub source_url: String,
     filename: String,    // TODO: See if I can limit this to a "valid" filename
     timestamp: String,   // TODO: See if I can limit this to valid timestamps only
     pub version: String, // TODO: See if I can limit this to 4 part SemVer with only the first part allowed to be non-zero
