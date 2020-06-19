@@ -27,7 +27,7 @@ pub struct ValidatePlugin {
 
 #[derive(Deserialize, Debug)]
 pub struct ValidatePluginVersion {
-    checksum: String,
+    pub checksum: String,
     changelog: String,
     name: String,
     #[serde(rename = "targetAbi")]
@@ -83,6 +83,12 @@ pub struct FourPartSemver {
 pub enum SemverError {
     InvalidLength(usize, usize),
     NotNumeric,
+}
+
+#[derive(Debug)]
+pub enum ChecksumError {
+    InvalidLength(usize),
+    InvalidCharacters,
 }
 
 impl TryFrom<String> for ThreePartSemver {
@@ -165,6 +171,15 @@ impl fmt::Display for SemverError {
                 write!(f, "Expected {} parts but got {}", expected, got)
             }
             Self::NotNumeric => write!(f, "Got a version part that was not numeric"),
+        }
+    }
+}
+
+impl fmt::Display for ChecksumError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidLength(got) => write!(f, "Expected length of 32 chars, got {}", got),
+            Self::InvalidCharacters => write!(f, "Expected only hexidecimal characters"),
         }
     }
 }

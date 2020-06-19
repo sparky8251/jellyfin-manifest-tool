@@ -10,6 +10,7 @@ struct ValidationReport {
     guid: Option<Vec<GuidError>>,
     url: Option<Vec<UrlError>>,
     semver: Option<Vec<SemverError>>,
+    checksum: Option<Vec<ChecksumError>>,
 }
 
 #[derive(Debug)]
@@ -31,6 +32,13 @@ struct SemverError {
     plugin_version: String,
     abi_error: Option<crate::manifest::SemverError>,
     version_error: Option<crate::manifest::SemverError>,
+}
+
+#[derive(Debug)]
+struct ChecksumError {
+    plugin_name: String,
+    plugin_version: String,
+    error: crate::manifest::ChecksumError,
 }
 
 impl ValidationReport {
@@ -69,11 +77,22 @@ impl fmt::Display for ValidationReport {
                         e.plugin_name, e.plugin_version
                     ));
                     if e.abi_error.is_some() {
-                        result.push_str(&format!("Target abi {} ", e.abi_error.as_ref().unwrap()));
+                        result.push_str(&format!("Target ABI {} ", e.abi_error.as_ref().unwrap()));
                     }
                     if e.version_error.is_some() {
                         result.push_str(&format!("Version {} ", e.version_error.as_ref().unwrap()));
                     }
+                    result.push('\n');
+                    results.push_str(&result);
+                }
+            }
+            if let Some(v) = &self.checksum {
+                for e in v {
+                    let mut result = String::new();
+                    result.push_str(&format!(
+                        "Plugin {} version {} failed validation! {}",
+                        e.plugin_name, e.plugin_version, e.error
+                    ));
                     result.push('\n');
                     results.push_str(&result);
                 }
@@ -89,6 +108,7 @@ pub fn validate_manifest(file: PathBuf) {
     report.guid = validate_guid(&manifest);
     report.url = validate_url(&manifest);
     report.semver = validate_semver(&manifest);
+    report.checksum = validate_checksum(&manifest);
     println!("{}", report)
 }
 
@@ -157,6 +177,37 @@ fn validate_semver(manifest: &[ValidatePlugin]) -> Option<Vec<SemverError>> {
                     version_error,
                 });
             }
+        }
+    }
+
+    if results.is_empty() {
+        None
+    } else {
+        Some(results)
+    }
+}
+
+fn validate_checksum(manifest: &[ValidatePlugin]) -> Option<Vec<ChecksumError>> {
+    let mut results = Vec::new();
+
+    for p in manifest {
+        for v in &p.versions {
+            if v.checksum.chars().count() != 32 {
+                results.push(ChecksumError {
+                    plugin_name: p.name.clone(),
+                    plugin_version: v.version.clone(),
+                    error: crate::manifest::ChecksumError::InvalidLength(
+                        v.checksum.chars().count(),
+                    ),
+                });
+            }
+            if v.checksum.chars().all(|c| !c.is_ascii_hexdigit()) {
+                results.push(ChecksumError {
+                    plugin_name: p.name.clone(),
+                    plugin_version: v.version.clone(),
+                    error: crate::manifest::ChecksumError::InvalidCharacters,
+                });
+            };
         }
     }
 
