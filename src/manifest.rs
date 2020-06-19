@@ -35,7 +35,7 @@ pub struct ValidatePluginVersion {
     #[serde(rename = "sourceUrl")]
     pub source_url: String,
     filename: String,
-    timestamp: String,
+    pub timestamp: String,
     pub version: String,
 }
 

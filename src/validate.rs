@@ -11,6 +11,7 @@ struct ValidationReport {
     url: Option<Vec<UrlError>>,
     semver: Option<Vec<SemverError>>,
     checksum: Option<Vec<ChecksumError>>,
+    timestamp: Option<Vec<TimestampError>>,
 }
 
 #[derive(Debug)]
@@ -41,9 +42,20 @@ struct ChecksumError {
     error: crate::manifest::ChecksumError,
 }
 
+#[derive(Debug)]
+struct TimestampError {
+    plugin_name: String,
+    plugin_version: String,
+    error: humantime::TimestampError,
+}
+
 impl ValidationReport {
     fn is_none(&self) -> bool {
-        self.guid.is_none() && self.url.is_none() && self.semver.is_none()
+        self.guid.is_none()
+            && self.url.is_none()
+            && self.semver.is_none()
+            && self.checksum.is_none()
+            && self.timestamp.is_none()
     }
 }
 
@@ -97,6 +109,17 @@ impl fmt::Display for ValidationReport {
                     results.push_str(&result);
                 }
             }
+            if let Some(v) = &self.timestamp {
+                for e in v {
+                    let mut result = String::new();
+                    result.push_str(&format!(
+                        "Plugin {} version {} failed validation! {}",
+                        e.plugin_name, e.plugin_version, e.error
+                    ));
+                    result.push('\n');
+                    results.push_str(&result);
+                }
+            }
             write!(f, "{}", results.trim())
         }
     }
@@ -109,6 +132,7 @@ pub fn validate_manifest(file: PathBuf) {
     report.url = validate_url(&manifest);
     report.semver = validate_semver(&manifest);
     report.checksum = validate_checksum(&manifest);
+    report.timestamp = validate_timestamp(&manifest);
     println!("{}", report)
 }
 
@@ -208,6 +232,28 @@ fn validate_checksum(manifest: &[ValidatePlugin]) -> Option<Vec<ChecksumError>> 
                     error: crate::manifest::ChecksumError::InvalidCharacters,
                 });
             };
+        }
+    }
+
+    if results.is_empty() {
+        None
+    } else {
+        Some(results)
+    }
+}
+
+fn validate_timestamp(manifest: &[ValidatePlugin]) -> Option<Vec<TimestampError>> {
+    let mut results = Vec::new();
+
+    for p in manifest {
+        for v in &p.versions {
+            if let Err(e) = humantime::parse_rfc3339_weak(&v.timestamp) {
+                results.push(TimestampError {
+                    plugin_name: p.name.clone(),
+                    plugin_version: v.version.clone(),
+                    error: e,
+                });
+            }
         }
     }
 
